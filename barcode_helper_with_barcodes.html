@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Barcode Helper</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:#f2f2f2;color:#111}
+header{position:sticky;top:0;background:#fff;padding:14px;border-bottom:1px solid #ddd;z-index:10}
+h1{font-size:22px;margin:0 0 10px}
+input{width:100%;font-size:18px;padding:13px;border:1px solid #999;border-radius:12px}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding-top:10px}
+.tab{white-space:nowrap;border:1px solid #999;background:#fff;border-radius:999px;padding:8px 12px;font-size:15px}
+.tab.active{background:#111;color:#fff}
+.notice{margin:12px;padding:10px 12px;background:#fff3c4;border:1px solid #d6bf5e;border-radius:10px;font-size:14px}
+main{padding:12px;display:grid;gap:12px}
+.card{background:#fff;border:1px solid #ddd;border-radius:14px;padding:14px}
+.name{font-size:19px;font-weight:750;margin-bottom:8px}
+.upc{font-size:13px;color:#666;margin-top:5px}
+svg{width:100%;height:auto;display:block;background:#fff}
+.open{width:100%;font-size:17px;padding:11px;margin-top:10px;border:1px solid #999;border-radius:10px;background:#fff}
+#overlay{display:none;position:fixed;inset:0;background:#fff;z-index:100;padding:20px;overflow:auto}
+#overlay h2{text-align:center;font-size:25px;margin:10px 0 18px}
+#close{width:100%;margin-top:18px;padding:14px;border:0;border-radius:11px;background:#111;color:#fff;font-size:18px}
+.empty{text-align:center;color:#666;padding:40px}
+</style>
+</head>
+<body>
+<header>
+<h1>Barcode Helper</h1>
+<input id="search" type="search" placeholder="Search Coke, Big K, root beer…">
+<div class="tabs" id="tabs"></div>
+</header>
+
+<div class="notice">Test each barcode against the exact 12-pack at your register before using it with customers.</div>
+<main id="list"></main>
+
+<div id="overlay">
+<h2 id="overlayTitle"></h2>
+<div id="overlayBarcode"></div>
+<button id="close">Close</button>
+</div>
+
+<script>
+const items=[{name:'A&W Root Beer 12-Pack',upc:'078000052166',group:'Root Beer'},
+{name:'Big K Cherry Cola 12-Pack',upc:'011110496870',group:'Big K'},
+{name:'Big K Diet Cola 12-Pack',upc:'011110496849',group:'Big K'},
+{name:'Big K Dr. K 12-Pack',upc:'011110497878',group:'Big K'},
+{name:'Big K Root Beer 12-Pack',upc:'011110496887',group:'Big K'},
+{name:'Big K Zero Sugar Root Beer 12-Pack',upc:'011110098025',group:'Big K'},
+{name:'Coca-Cola 12-Pack',upc:'049000028904',group:'Coca-Cola'},
+{name:'Coca-Cola Cherry 12-Pack',upc:'049000031034',group:'Coca-Cola'},
+{name:'Coca-Cola Cherry Zero Sugar 12-Pack',upc:'049000047516',group:'Coca-Cola'},
+{name:'Diet Coke Cherry 12-Pack',upc:'049000031041',group:'Coca-Cola'}];
+
+const L={
+"0":"0001101","1":"0011001","2":"0010011","3":"0111101","4":"0100011",
+"5":"0110001","6":"0101111","7":"0111011","8":"0110111","9":"0001011"
+};
+const R={
+"0":"1110010","1":"1100110","2":"1101100","3":"1000010","4":"1011100",
+"5":"1001110","6":"1010000","7":"1000100","8":"1001000","9":"1110100"
+};
+
+let selected="All";
+
+function barcodeSVG(upc,height=118){
+ let bits="101";
+ for(let i=0;i<6;i++) bits+=L[upc[i]];
+ bits+="01010";
+ for(let i=6;i<12;i++) bits+=R[upc[i]];
+ bits+="101";
+
+ const quiet=10,module=3,textHeight=30;
+ const width=(bits.length+quiet*2)*module;
+ let bars="";
+
+ for(let i=0;i<bits.length;i++){
+   if(bits[i]==="1"){
+     const guard=i<3||(i>=45&&i<50)||i>=92;
+     const h=guard?height+10:height;
+     bars+=`<rect x="${(i+quiet)*module}" y="0" width="${module}" height="${h}" fill="#000"/>`;
+   }
+ }
+
+ return `<svg viewBox="0 0 ${width} ${height+textHeight+14}" aria-label="UPC ${upc}">
+ <rect width="100%" height="100%" fill="#fff"/>
+ ${bars}
+ <text x="${width/2}" y="${height+textHeight}" text-anchor="middle" font-family="monospace" font-size="20">${upc}</text>
+ </svg>`;
+}
+
+function drawTabs(){
+ const groups=["All",...new Set(items.map(x=>x.group))];
+ const tabs=document.getElementById("tabs");
+ tabs.innerHTML=groups.map(g=>`<button class="tab ${g===selected?"active":""}" data-group="${g}">${g}</button>`).join("");
+ tabs.querySelectorAll(".tab").forEach(btn=>{
+   btn.onclick=()=>{selected=btn.dataset.group;drawTabs();render();};
+ });
+}
+
+function render(){
+ const q=document.getElementById("search").value.trim().toLowerCase();
+ const filtered=items
+   .filter(x=>selected==="All"||x.group===selected)
+   .filter(x=>x.name.toLowerCase().includes(q)||x.upc.includes(q))
+   .sort((a,b)=>a.name.localeCompare(b.name));
+
+ const list=document.getElementById("list");
+ if(!filtered.length){list.innerHTML='<div class="empty">No matching items</div>';return;}
+
+ list.innerHTML=filtered.map(x=>`
+ <section class="card">
+   <div class="name">${x.name}</div>
+   ${barcodeSVG(x.upc)}
+   <div class="upc">UPC: ${x.upc}</div>
+   <button class="open" data-upc="${x.upc}">Open full screen</button>
+ </section>`).join("");
+
+ list.querySelectorAll(".open").forEach(btn=>{
+   btn.onclick=()=>{
+     const x=items.find(i=>i.upc===btn.dataset.upc);
+     document.getElementById("overlayTitle").textContent=x.name;
+     document.getElementById("overlayBarcode").innerHTML=barcodeSVG(x.upc,270);
+     document.getElementById("overlay").style.display="block";
+   };
+ });
+}
+
+document.getElementById("search").oninput=render;
+document.getElementById("close").onclick=()=>document.getElementById("overlay").style.display="none";
+drawTabs();
+render();
+</script>
+</body>
+</html>
