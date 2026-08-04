@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<title>Barcode Helper</title>
+<style>
+:root{--bg:#f2f2f7;--card:#fff;--text:#111;--muted:#6b6b72;--line:#d8d8de;--warn:#fff5c7}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.97);padding:14px;border-bottom:1px solid var(--line)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+h1{font-size:24px;margin:0}
+.count{font-size:13px;color:var(--muted)}
+#search{width:100%;margin-top:12px;padding:13px 14px;font-size:18px;border:1px solid #aaa;border-radius:12px;background:#fff}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding-top:10px}
+.tab{flex:0 0 auto;padding:8px 12px;border:1px solid #aaa;border-radius:999px;background:#fff;font-size:15px}
+.tab.active{background:#111;color:#fff;border-color:#111}
+.notice{margin:12px;padding:10px 12px;background:var(--warn);border:1px solid #dcc86c;border-radius:11px;font-size:14px;line-height:1.35}
+.section-title{padding:6px 14px 0;font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+main{padding:10px 12px 30px;display:grid;gap:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px}
+.row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.name{font-size:19px;font-weight:750;line-height:1.2}
+.star{border:0;background:transparent;font-size:27px;line-height:1;padding:0;color:#aaa}
+.star.saved{color:#e2a600}
+.code{margin-top:6px;color:var(--muted);font-size:13px;letter-spacing:.4px}
+.actions{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:10px}
+.open,.copy{padding:11px;border-radius:11px;font-size:16px}
+.open{border:0;background:#111;color:#fff}
+.copy{border:1px solid #999;background:#fff}
+svg{display:block;width:100%;height:auto;background:#fff;margin-top:9px}
+.empty{text-align:center;color:var(--muted);padding:50px 15px}
+#overlay{display:none;position:fixed;inset:0;z-index:100;background:#fff;padding:max(20px,env(safe-area-inset-top)) 18px max(20px,env(safe-area-inset-bottom));overflow:auto}
+#overlay h2{text-align:center;font-size:26px;line-height:1.15;margin:10px 0 16px}
+.hint{text-align:center;color:var(--muted);margin-top:10px}
+#close{width:100%;margin-top:18px;padding:14px;border:0;border-radius:12px;background:#111;color:#fff;font-size:18px}
+.toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 14px;border-radius:999px;opacity:0;transition:.2s;z-index:200}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+<div class="top"><h1>Barcode Helper</h1><div class="count" id="count"></div></div>
+<input id="search" type="search" placeholder="Search Coke, Big K, root beer…" autocomplete="off">
+<div class="tabs" id="tabs"></div>
+</header>
+
+<div class="notice">Test every barcode against the exact 12-pack before using it during a transaction. Package sizes can have different UPCs.</div>
+<div class="section-title" id="sectionTitle"></div>
+<main id="list"></main>
+
+<div id="overlay">
+<h2 id="overlayTitle"></h2>
+<div id="overlayBarcode"></div>
+<div class="hint">Turn screen brightness up if the scanner has trouble.</div>
+<button id="close">Close</button>
+</div>
+
+<div class="toast" id="toast">Copied</div>
+
+<script>
+const items=[{"name":"Fred Meyer Purified Water 24-Pack (16.9 oz)","code":"011110827488","category":"Water","aliases":"water bottled water case 24 pack purified kroger fred meyer"},{"name":"Tidy Cats 24/7 Performance Clumping Litter 35 lb Pail","code":"070230016690","category":"Cat Litter","aliases":"tidy cats 35 pound pail clumping heavy"},{"name":"Tidy Cats Glade Clear Springs Non-Clumping Litter 50 lb","code":"070230165213","category":"Cat Litter","aliases":"tidy cats glade 50 pound bag non clumping heavy"},{"name":"Arm & Hammer Double Duty Clumping Litter 40 lb","code":"033200024088","category":"Cat Litter","aliases":"arm hammer 40 pound cat litter heavy"},{"name":"Arm & Hammer Ultra Last Clumping Litter 20 lb","code":"033200022039","category":"Cat Litter","aliases":"arm hammer 20 pound cat litter"},{"name":"Arm & Hammer Slide Clumping Cat Litter 19 lb","code":"033200973577","category":"Cat Litter","aliases":"arm hammer slide 19 pound litter"},{"name":"Fred Meyer Purified Water 24-Pack","code":"011110827487","category":"Water","aliases":"kroger purified bottled water 24 pack case"},{"name":"Fred Meyer Natural Spring Water 24-Pack","code":"011110900463","category":"Water","aliases":"kroger spring bottled water 24 pack case"},{"name":"Fred Meyer Purified Water 40-Pack","code":"011110104380","category":"Water","aliases":"kroger purified bottled water 40 pack case"},{"name":"Kroger Natural Spring Water 24-Pack","code":"011110879028","category":"Water","aliases":"spring bottled water 24 pack case"},{"name":"Kroger Alkaline Water 24-Pack","code":"011110104540","category":"Water","aliases":"alkaline bottled water 24 pack case"},{"name":"Dasani Purified Water 24-Pack","code":"049000031652","category":"Water","aliases":"dasani bottled water 24 pack case"},{"name":"Dasani Purified Water 32-Pack","code":"049000048056","category":"Water","aliases":"dasani bottled water 32 pack case"},{"name":"Aquafina Purified Water 24-Pack","code":"012000504044","category":"Water","aliases":"aquafina bottled water 24 pack case"},{"name":"Aquafina Purified Water 32-Pack","code":"012000013119","category":"Water","aliases":"aquafina bottled water 32 pack case"},{"name":"7UP 12-Pack","code":"078000011807","category":"Soda","aliases":"7 up seven up lemon lime soda 12 pack"},{"name":"7UP Cherry 12-Pack","code":"078000011821","category":"Soda","aliases":"7 up cherry soda 12 pack"},{"name":"7UP Cherry Zero Sugar 12-Pack","code":"078000011883","category":"Soda","aliases":"7 up cherry zero diet soda 12 pack"},{"name":"A&W Root Beer 12-Pack","code":"078000052169","category":"Soda","aliases":"aw rootbeer soda 12 pack"},{"name":"A&W Cream Soda 12-Pack","code":"078000054163","category":"Soda","aliases":"aw cream vanilla soda 12 pack"},{"name":"Barq's Root Beer 12-Pack","code":"049000030129","category":"Soda","aliases":"barqs rootbeer soda 12 pack"},{"name":"Barq's Zero Sugar Root Beer 12-Pack","code":"049000031089","category":"Soda","aliases":"barqs zero diet rootbeer soda 12 pack"},{"name":"Big K Cherry Cola 12-Pack","code":"011110496874","category":"Soda","aliases":"big k bk cherry cola soda 12 pack"},{"name":"Big K Cola 12-Pack","code":"011110496805","category":"Soda","aliases":"big k bk regular cola soda 12 pack"},{"name":"Big K Diet Cola 12-Pack","code":"011110496843","category":"Soda","aliases":"big k bk diet cola soda 12 pack"},{"name":"Big K Dr. K 12-Pack","code":"011110497871","category":"Soda","aliases":"big k bk dr k doctor pepper soda 12 pack"},{"name":"Big K Lemon Lime 12-Pack","code":"011110496829","category":"Soda","aliases":"big k bk lemon lime soda 12 pack"},{"name":"Big K Orange 12-Pack","code":"011110496867","category":"Soda","aliases":"big k bk orange soda 12 pack"},{"name":"Big K Orange Cream Soda 12-Pack","code":"011110006189","category":"Soda","aliases":"big k bk orange cream soda 12 pack"},{"name":"Big K Orange Zero Sugar 12-Pack","code":"011110098085","category":"Soda","aliases":"big k bk orange zero diet soda 12 pack"},{"name":"Big K Root Beer 12-Pack","code":"011110496881","category":"Soda","aliases":"big k bk rootbeer soda 12 pack"},{"name":"Big K Root Beer Zero Sugar 12-Pack","code":"011110098016","category":"Soda","aliases":"big k bk rootbeer zero diet soda 12 pack"},{"name":"Big K Citrus Drop Zero Sugar 12-Pack","code":"011110046147","category":"Soda","aliases":"big k bk citrus drop zero soda 12 pack"},{"name":"Canada Dry Ginger Ale 12-Pack","code":"078000152166","category":"Soda","aliases":"canada dry ginger ale soda 12 pack"},{"name":"Coca-Cola 12-Pack","code":"049000028904","category":"Soda","aliases":"coke classic regular soda 12 pack"},{"name":"Coca-Cola Cherry 12-Pack","code":"049000031034","category":"Soda","aliases":"cherry coke soda 12 pack"},{"name":"Coca-Cola Cherry Zero Sugar 12-Pack","code":"049000047516","category":"Soda","aliases":"cherry coke zero soda 12 pack"},{"name":"Coca-Cola Zero Sugar 12-Pack","code":"049000042559","category":"Soda","aliases":"coke zero soda 12 pack"},{"name":"Crush Orange 12-Pack","code":"078000013054","category":"Soda","aliases":"crush orange soda 12 pack"},{"name":"Diet Coke 12-Pack","code":"049000028911","category":"Soda","aliases":"diet coke soda 12 pack"},{"name":"Diet Coke Caffeine Free 12-Pack","code":"049000029345","category":"Soda","aliases":"diet coke caffeine free soda 12 pack"},{"name":"Diet Coke Cherry 12-Pack","code":"049000031041","category":"Soda","aliases":"diet cherry coke soda 12 pack"},{"name":"Diet Mountain Dew 12-Pack","code":"012000809972","category":"Soda","aliases":"diet mountain dew mt dew soda 12 pack"},{"name":"Dr Pepper Cherry 12-Pack","code":"078000098167","category":"Soda","aliases":"dr pepper cherry soda 12 pack"},{"name":"Fanta Orange 12-Pack","code":"049000030730","category":"Soda","aliases":"fanta orange soda 12 pack"},{"name":"Fanta Orange Zero Sugar 12-Pack","code":"049000041217","category":"Soda","aliases":"fanta orange zero diet soda 12 pack"},{"name":"Mountain Dew 12-Pack","code":"012000809965","category":"Soda","aliases":"mountain dew mt dew original soda 12 pack"},{"name":"Mountain Dew Code Red 12-Pack","code":"012000809989","category":"Soda","aliases":"mountain dew code red soda 12 pack"},{"name":"Mountain Dew Baja Blast 12-Pack","code":"012000130328","category":"Soda","aliases":"mountain dew baja blast soda 12 pack"},{"name":"Mug Root Beer 12-Pack","code":"012000810008","category":"Soda","aliases":"mug rootbeer soda 12 pack"},{"name":"Pepsi 12-Pack","code":"012000809941","category":"Soda","aliases":"pepsi regular cola soda 12 pack"},{"name":"Diet Pepsi 12-Pack","code":"012000171864","category":"Soda","aliases":"diet pepsi soda 12 pack"},{"name":"Diet Pepsi Caffeine Free 12-Pack","code":"012000172090","category":"Soda","aliases":"diet pepsi caffeine free soda 12 pack"},{"name":"Diet Pepsi Wild Cherry 12-Pack","code":"012000172342","category":"Soda","aliases":"diet wild cherry pepsi soda 12 pack"},{"name":"Pepsi Wild Cherry Zero Sugar 12-Pack","code":"012000170775","category":"Soda","aliases":"wild cherry pepsi zero soda 12 pack"},{"name":"Seagram's Ginger Ale 12-Pack","code":"072979004167","category":"Soda","aliases":"seagrams ginger ale soda 12 pack"},{"name":"Sprite 12-Pack","code":"049000028928","category":"Soda","aliases":"sprite lemon lime soda 12 pack"},{"name":"Sprite Zero Sugar 12-Pack","code":"049000037111","category":"Soda","aliases":"sprite zero diet soda 12 pack"},{"name":"Sunkist Orange 12-Pack","code":"078000113167","category":"Soda","aliases":"sunkist orange soda 12 pack"}];
+const L={"0":"0001101","1":"0011001","2":"0010011","3":"0111101","4":"0100011","5":"0110001","6":"0101111","7":"0111011","8":"0110111","9":"0001011"};
+const R={"0":"1110010","1":"1100110","2":"1101100","3":"1000010","4":"1011100","5":"1001110","6":"1010000","7":"1000100","8":"1001000","9":"1110100"};
+let selected="All";
+let favorites=JSON.parse(localStorage.getItem("barcodeFavorites")||"[]");
+let recent=JSON.parse(localStorage.getItem("barcodeRecent")||"[]");
+
+function barcodeSVG(code,height=118){
+  let bits="101";
+  for(let i=0;i<6;i++) bits+=L[code[i]];
+  bits+="01010";
+  for(let i=6;i<12;i++) bits+=R[code[i]];
+  bits+="101";
+  const quiet=12,module=3,textHeight=31,width=(bits.length+quiet*2)*module;
+  let bars="";
+  for(let i=0;i<bits.length;i++){
+    if(bits[i]==="1"){
+      const guard=i<3||(i>=45&&i<50)||i>=92;
+      bars+=`<rect x="${(i+quiet)*module}" y="0" width="${module}" height="${guard?height+10:height}" fill="#000"/>`;
+    }
+  }
+  return `<svg viewBox="0 0 ${width} ${height+textHeight+14}" aria-label="UPC ${code}">
+  <rect width="100%" height="100%" fill="#fff"/>${bars}
+  <text x="${width/2}" y="${height+textHeight}" text-anchor="middle" font-family="monospace" font-size="20">${code}</text>
+  </svg>`;
+}
+function groups(){return ["All","Favorites","Recent",...new Set(items.map(x=>x.category))]}
+function drawTabs(){
+  const el=document.getElementById("tabs");
+  el.innerHTML=groups().map(g=>`<button class="tab ${g===selected?"active":""}" data-group="${g}">${g}</button>`).join("");
+  el.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{selected=b.dataset.group;drawTabs();render()});
+}
+function filtered(){
+  const q=document.getElementById("search").value.trim().toLowerCase();
+  let set=items.slice();
+  if(selected==="Favorites") set=set.filter(x=>favorites.includes(x.code));
+  else if(selected==="Recent") set=recent.map(c=>items.find(x=>x.code===c)).filter(Boolean);
+  else if(selected!=="All") set=set.filter(x=>x.category===selected);
+  if(q) set=set.filter(x=>(x.name+" "+x.aliases+" "+x.code).toLowerCase().includes(q));
+  if(selected!=="Recent") set.sort((a,b)=>a.name.localeCompare(b.name));
+  return set;
+}
+function render(){
+  const set=filtered(), list=document.getElementById("list");
+  document.getElementById("count").textContent=`${set.length} item${set.length===1?"":"s"}`;
+  document.getElementById("sectionTitle").textContent=selected;
+  if(!set.length){list.innerHTML='<div class="empty">No matching items</div>';return}
+  list.innerHTML=set.map(x=>`<section class="card">
+  <div class="row"><div class="name">${x.name}</div><button class="star ${favorites.includes(x.code)?"saved":""}" data-fav="${x.code}">★</button></div>
+  ${barcodeSVG(x.code)}
+  <div class="code">UPC: ${x.code}</div>
+  <div class="actions"><button class="open" data-open="${x.code}">Open full screen</button><button class="copy" data-copy="${x.code}">Copy</button></div>
+  </section>`).join("");
+  list.querySelectorAll("[data-fav]").forEach(b=>b.onclick=()=>toggleFavorite(b.dataset.fav));
+  list.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openItem(b.dataset.open));
+  list.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>copyCode(b.dataset.copy));
+}
+function toggleFavorite(code){
+  favorites=favorites.includes(code)?favorites.filter(x=>x!==code):[...favorites,code];
+  localStorage.setItem("barcodeFavorites",JSON.stringify(favorites));render();
+}
+function openItem(code){
+  const item=items.find(x=>x.code===code);
+  recent=[code,...recent.filter(x=>x!==code)].slice(0,12);
+  localStorage.setItem("barcodeRecent",JSON.stringify(recent));
+  document.getElementById("overlayTitle").textContent=item.name;
+  document.getElementById("overlayBarcode").innerHTML=barcodeSVG(code,285);
+  document.getElementById("overlay").style.display="block";
+}
+async function copyCode(code){
+  try{await navigator.clipboard.writeText(code)}catch(e){}
+  const t=document.getElementById("toast");t.classList.add("show");setTimeout(()=>t.classList.remove("show"),900);
+}
+document.getElementById("search").oninput=render;
+document.getElementById("close").onclick=()=>document.getElementById("overlay").style.display="none";
+drawTabs();render();
+</script>
+</body>
+</html>
